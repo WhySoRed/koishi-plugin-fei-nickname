@@ -1,7 +1,5 @@
-import { Context, Schema } from 'koishi'
+import { Context, Schema, h, Session } from 'koishi'
 import {} from '@koishijs/plugin-help';
-import { Session } from 'inspector';
-import { platform } from 'os';
 export const inject = {
     required: ['database']
 }
@@ -21,7 +19,7 @@ export const Config: Schema<Config> = Schema.object({
 export const nickName = {
     //根据输入的session返回session的发送者的自称
     //没有自称则会以群昵称>平台昵称>默认昵称的优先级向后获取
-    getSelfName : async (session:any) => {
+    getSenderNickName : async (session: Session) => {
         const ctx = session.app;
         const platform = session.platform;
         const userId = session.event.user.id;
@@ -35,24 +33,47 @@ export const nickName = {
         else
             return userData.nickName;
     },
-    //根据输入的session和text，获取text中包含的<at id="(平台id)">的id
-    //返回一个这些id转换为名字的数组
-    //优先级是session发送者给对方的外号>自称>群昵称>平台昵称>默认昵称
-    getNickNameGivenFromText : async (session: any, text: string) => {
+    //根据输入的session和id返回一个外号
+    //没有外号则以自称>群昵称>平台昵称>默认昵称的优先级向后获取
+    getNickNameGivenById : async (session: Session, callerUserId: string, receiverUserId: string) => {
         const ctx = session.app;
-        const match = Array.from(text.matchAll(/<at id="(\d+)"\/>/g));
-        if (match.length === 0) return [];
         const platform = session.platform;
-        return match.map((element) => element[1]).map(async (userId) => {
+        const nickNameGiven = (await ctx.database.get('nickNameGivenData',{ platform, callerUserId, receiverUserId}))[0]?.nickNameGiven;
+            if(nickNameGiven)
+                return nickNameGiven;
+            else {
+                const userId = receiverUserId;
+                const userData = (await ctx.database.get('nickNameUserData',{ platform, userId }))[0]
+                if(userData.nameBeSet)
+                    return userData.nickName
+                else if(!session.event.channel.type) {
+                    const member = await session.bot.getGuildMember(session.guildId, userId);
+                    if(member)
+                        return member.nick? member.nick: member.user.name;
+                }
+                return userData.nickName;
+            }
+
+    },
+    //根据输入的session和source，获取source中包含的at消息元素的id
+    //返回一个这些id转换为外号的数组
+    //没有外号则以自称>群昵称>平台昵称>默认昵称的优先级向后获取
+    getNickNameGivenInText : async (session: Session, source: string) => {
+        const ctx = session.app;
+        const idList = h.select(source,'at').map((element) => element.attrs.id);
+        if (idList.length === 0) return [];
+        const platform = session.platform;
+        return idList.map(async (userId) => {
             const callerUserId = session.event.user.id;
             const receiverUserId = userId;
             const nickNameGiven = (await ctx.database.get('nickNameGivenData',{ platform, callerUserId, receiverUserId}))[0]?.nickNameGiven;
             if(nickNameGiven)
                 return nickNameGiven;
             else {
-                const userId = receiverUserId;
                 const userData = (await ctx.database.get('nickNameUserData',{ platform, userId }))[0]
-                if(!session.event.channel.type) {
+                if(userData.nameBeSet)
+                    return userData.nickName
+                else if(!session.event.channel.type) {
                     const member = await session.bot.getGuildMember(session.guildId, userId);
                     if(member)
                         return member.nick? member.nick: member.user.name;
@@ -78,7 +99,7 @@ export interface NickNameUserData {
     nameBeSet: boolean
     enableNickNamed: boolean
     enableDoSomeThing: boolean
-    nickNamedBlacklist: string[]
+    nickNameGivenBlacklist: string[]
     doSomeThingBlacklist: string[]
 }
 
@@ -104,7 +125,7 @@ export function apply(ctx: Context, config: Config) {
     },{
         primary: 'id',
         autoInc: true,
-        unique: [['platform','userId']]     // 用键值对的唯一性保证单一平台的单一用户的自称
+        unique: [['platform','userId']]     // 用键值对确保单一平台的单一用户的自称的唯一性
     })
 
     // 该数据表用于储存caller对receiver的nickName关系
@@ -117,9 +138,9 @@ export function apply(ctx: Context, config: Config) {
         primary: ['platform','callerUserId','receiverUserId'],           // ※ 确保这一关系的唯一性 ※
     })
 
-    ctx.command('外号测试').action(async (_) => {
-        console.log(_.session.user);
-        console.log(_.session.event.message.content);
+    ctx.command('外号测试').action(async ({ session }) => {
+        session.execute('外号.设定自称');
+        //console.log(id);
     })
 
 
@@ -127,8 +148,8 @@ export function apply(ctx: Context, config: Config) {
         return '';
     })
 
-    ctx.command('外号.设定自称').action(() => {
-        return '';
+    ctx.command('外号.设定自称 <nickName>').action(async(_,nickName) => {
+        if(nickName === undefined) return '设定成什么？';
     })
 
     ctx.command('外号.取消自称').action(() => {
