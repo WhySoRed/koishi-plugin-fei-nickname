@@ -140,7 +140,7 @@ export function apply(ctx: Context, config: Config) {
 
     ctx.command('外号测试').action(async ({ session }) => {
         session.execute('外号.设定自称');
-        //console.log(id);
+        console.log(id);
     })
 
 
