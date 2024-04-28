@@ -10,12 +10,14 @@ export const name = 'fei-nickname'
 
 export interface Config {
     defaultNickName:string
+    globalNickNameGiven: string
     globalEnableDoSomeThing:boolean
 }
 
 export const Config: Schema<Config> = Schema.object({
     defaultNickName: Schema.string().default('那个谁').description('获取用户名失败时的默认名称'),
-    globalEnableDoSomeThing: Schema.boolean().default(true).description('开启动手动脚功能'),
+    globalNickNameGiven: Schema.boolean().default(true).description('开启“外号”功能'),
+    globalEnableDoSomeThing: Schema.boolean().default(true).description('开启“动手动脚”功能'),
 })
 
 export const nickName = {
@@ -126,11 +128,13 @@ export function apply(ctx: Context, config: Config) {
         unique: [['guildId','nickNameGiven']]
     })
 
+    //本插件提供的用户间功能只有取外号与行为两种，并储存在同一个数据表中
+    //因此使用布尔值来区分blacklist的类型
     ctx.model.extend('nnBlacklistData', {
         blacklistId: 'unsigned',
-        typeIsNickGiven: { type: 'boolean', nullable: false },
-        blacklistFrom: { type: 'unsigned', nullable: false },
-        blacklistTo: { type: 'unsigned', nullable: false }
+        typeIsNickGiven: { type: 'boolean', nullable: false },  // 为true时表示是起外号功能的黑名单，为false表示是动手动脚功能的黑名单
+        blacklistFrom: { type: 'unsigned', nullable: false },   // 拉黑人的一方/不允许对方使用对应功能的一方  
+        blacklistTo: { type: 'unsigned', nullable: false }      // 被拉黑的一方/无法对对方使用对应功能的一方
     },{
         primary: 'blacklistId',
         autoInc: true,
@@ -138,7 +142,7 @@ export function apply(ctx: Context, config: Config) {
             blacklistFrom: ['nnUserData', 'id'],
             blacklistTo: ['nnUserData', 'id']
         },
-        unique:[['blacklistFrom','blacklistTo']]
+        unique:[['typeIsNickGiven', 'blacklistFrom', 'blacklistTo']]
     })
 
 
