@@ -1,4 +1,4 @@
-import { Context, Session } from 'koishi'
+import { Context, remove, Session } from 'koishi'
 import { Config } from '.'
 export const inject = {
     required: ['database'],
@@ -6,104 +6,109 @@ export const inject = {
 
 declare module 'koishi' {
     interface Tables {
-        nnUserData: NNUserData
         nnNickData: NNNickData
         nnGivenData: NNGivenData
         nnBlacklistData: NNBlacklistData
     }
 }
 
-export interface NNUserData {
-    id: number
-    userId: string
-    platform: string
-    mainNickNameId: number
-}
-
 export interface NNNickData {
     nickNameId: number
-    ownerId: number
+    ownerUid: string
     nickName: string
 }
 
 export interface NNGivenData {
-    givenNameId: number
-    ownerId: number
-    giverId: number
-    guildId: string
-    nickNameGiven: string
+    nickGivenId: number
+    ownerUid: string
+    giverUid: string
+    cid: string
+    nickGiven: string
 }
 //注意是Black"l"ist不是Black"L"ist
 export interface NNBlacklistData {
     blacklistId: number
-    blacklistFrom: number
-    blacklistTo: number
-    blacklistType: "given" | "dosth"
+    fromUid: string
+    toUid: string
+    type: "given" | "dosth"
 }
 
 export const nickName = {
     initialize : async (ctx: Context, config: Config) => await nickName._ininitialize(ctx, config),
-    getNick : async (session: Session):Promise<string> => await nickName._nick.get(session),
-    getNickGiven : async (session: Session, userId: string | string[]): Promise<string | string[]> => await nickName._nickGiven.get(session, userId),
-    checkBeBlacklist : async(session: Session, userId: string) => await nickName._blacklist.check(session, userId),
+    getNick : async (session: Session): Promise<string> => await nickName._nick.get(session),
+    getNickGiven : async (session: Session, uid: string | string[]): Promise<string | string[]> => await nickName._nickGiven.get(session, uid),
+    checkBeBlacklist : async(session: Session, uid: string) => await nickName._blacklist.check(session, uid),
 
     _nick : {
         //根据输入的session返回session的发送者的自称
         //没有自称则会以群昵称>平台昵称>默认昵称的优先级向后获取
-        get : async (session: Session):Promise<string> => {
+        get : async (session: Session): Promise<string> => {
             const ctx = session.app;
-            const platform = session.platform;
-            const userId = session.event.user.id;
+            const uid = session.uid;
             return '';
         },
+        
+        add: async (session: Session, nickName: string) => {
+            const ctx = session.app;
+            ctx.database.create('nnNickData', { ownerUid: session.uid, nickName: nickName });
+        }
+
+        remove: async (session: Session, nickName: string) => {
+            const ctx = session.app;
+            ctx.database.remove('nnNickData', { ownerUid: session.uid, nickName: nickName });
+        }
+
     },
 
     _nickGiven : {
-        //根据输入的session和userId返回对应的外号
+        //根据输入的session和uid返回对应的外号
         //优先从本session发送者为该成员起的外号里随机获取，如果空则从本群组该成员拥有的外号里随机获取
         //若本群组该成员无外号，则以自称>群昵称>平台昵称>默认昵称的优先级向后获取
-        get: async (session: Session, userId:string | string[]): Promise<string | string[]> => {
-            if (Array.isArray(userId)) 
-                return Promise.all(userId.map(async userId => await nickName._nickGiven.get(session, userId) as string));
+        get: async (session: Session,uid:string | string[]): Promise<string | string[]> => {
+            if (Array.isArray(uid)) 
+                return Promise.all(uid.map(async uid => await nickName._nickGiven.get(session,uid) as string));
             const ctx = session.app;
             const platform = session.platform;
             return '';
         },
+
+        add: async (session: Session, uid: string, nickGiven: string) => {
+            const ctx = session.app;
+            ctx.database.create('nnGivenData', { cid: session.cid, ownerUid: uid, giverUid: session.uid, nickGiven: nickGiven });
+        },
+
+        remove: async (session: Session, uid: string, nickGiven: string) => {
+            const ctx = session.app;
+            ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: uid, nickGiven: nickGiven });            
+        },
+
+        clean: async (session: Session, uid: string) => {
+            const ctx = session.app;
+            ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: uid });
+        }
+
     },
 
     _blacklist : {
-        add: async() => {
-
+        add: async(session: Session, uid: string, type: "given" | "dosth") => {
+            const ctx = session.app;
+            ctx.database.create('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
         },
         //检测发送者是否被对方拉黑（注意与拉黑方向相反）
-        check : async(session: Session, userId: string):Promise<boolean> => {
+        check : async(session: Session, uid: string):Promise<boolean> => {
             return true;
         }
     },
 
     _ininitialize : async (ctx: Context, config : Config) => {
-        ctx.model.extend('nnUserData', {
-            id: 'unsigned',
-            userId: { type: 'string',nullable: false },
-            platform: { type: 'string',nullable: false },
-            mainNickNameId: { type: 'unsigned', initial: 0 },       //此数据为0时表示无自称
-        },{
-            primary: 'id',
-            autoInc: true,
-            unique: [['userId','platform']]
-        })
-        
         if(config.globalEnableNickName) {
             ctx.model.extend('nnNickData', {
                 nickNameId: { type: 'unsigned', nullable: false },
-                ownerId: { type: 'unsigned', nullable: false },
+                ownerUid: { type: 'string', nullable: false },
                 nickName: { type: 'string', nullable: false },
             },{
                 primary: 'nickNameId',
                 autoInc: true,
-                foreign:{
-                    ownerId: ['nnUserData', 'id']
-                }
             })
         }
         else {
@@ -116,21 +121,17 @@ export const nickName = {
         }
 
         if(config.globalEnableNickNameGiven) {
-            //本数据表储存
+            //本数据表储存给人起的外号
             ctx.model.extend('nnGivenData', {
-                givenNameId: 'unsigned',
-                guildId: { type: 'string', nullable: false },
-                ownerId: { type: 'unsigned', nullable: false },
-                giverId: { type: 'unsigned', nullable: false },
-                nickNameGiven: { type: 'string', nullable: false }
+                nickGivenId: 'unsigned',
+                cid: { type: 'string', nullable: false },
+                ownerUid: { type: 'string', nullable: false },
+                giverUid: { type: 'string', nullable: false },
+                nickGiven: { type: 'string', nullable: false }
             },{
-                primary: 'givenNameId',
+                primary: 'nickGivenId',
                 autoInc: true,
-                foreign: {
-                    ownerId: ['nnUserData', 'id'],
-                    giverId: ['nnUserData', 'id']
-                },
-                unique: [['guildId','nickNameGiven']]
+                unique: [['cid','nickGiven']]
             })
         }
         else {
@@ -143,20 +144,16 @@ export const nickName = {
         }
         if(config.globalEnableBlacklist) {
             //本数据表储存全部黑名单信息
-            //※ blacklistTo 为 0 时表示禁止任何人对自己使用本功能
+            //※ toUid 为 0 时表示禁止任何人对自己使用本功能
             ctx.model.extend('nnBlacklistData', {
                 blacklistId: 'unsigned',
-                blacklistFrom: { type: 'unsigned', nullable: false },   // 拉黑人的一方/不允许对方使用对应功能的一方  
-                blacklistTo: { type: 'unsigned', nullable: false },     // 被拉黑的一方/无法对对方使用对应功能的一方  
-                blacklistType: { type: 'string', nullable: false }      // "given" | "dosth"
+                fromUid: { type: 'string', nullable: false },   // 拉黑人的一方/不允许对方使用对应功能的一方  
+                toUid: { type: 'string', nullable: false },     // 被拉黑的一方/无法对对方使用对应功能的一方  
+                type: { type: 'string', nullable: false }      // "given" | "dosth"
             },{
                 primary: 'blacklistId',
                 autoInc: true,
-                foreign: {
-                    blacklistFrom: ['nnUserData', 'id'],
-                    blacklistTo: ['nnUserData', 'id']
-                },
-                unique: [['blacklistFrom', 'blacklistTo','blacklistType']]
+                unique: [['fromUid', 'toUid','type']]
             })
         }
         else {

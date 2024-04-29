@@ -20,9 +20,9 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 interface nickName {
-    initialize : (ctx: Context, config: Config) => {}
-    getNick: (session: Session)=> string
-    getNickGiven: (session: Session,userId: string | string[]) => string | string[]
+    initialize : (ctx: Context, config: Config) => void
+    getNick: (session: Session) => string
+    getNickGiven: (session: Session,uid: string | string[]) => string | string[]
 }
 
 export function apply(ctx: Context, config: Config) {
@@ -36,6 +36,21 @@ export function apply(ctx: Context, config: Config) {
         ctx.command('自称').action(({ session }) => {
             return session.event.user.name;
         })
+
+        ctx.command('自称.设定').action(({ session }) => {
+
+        })
+        ctx.command('自称.管理').action(({ session }) => {
+
+        })
+
+        ctx.command('自称.取消').action(({ session }) => {
+
+        })
+
+        ctx.command('自称.清空').action(({ session }) => {
+
+        })
     }
 
     if(config.globalEnableNickNameGiven) {
@@ -44,22 +59,19 @@ export function apply(ctx: Context, config: Config) {
             return session.event.user.name;
         })
 
-        ctx.command('外号.起外号').action(({ session }) => {
+        ctx.command('外号.设定').alias('起外号')
+        .action(({ session }) => {
             return session.event.user.name;
         })
 
-        ctx.command('外号.取消外号').action(({ session }) => {
-            return session.event.user.name;
-        })
-
-        ctx.command('外号.取消全部外号').action(({ session }) => {
+        ctx.command('外号.取消').alias('取消外号')
+        .action(({ session }) => {
             return session.event.user.name;
         })
 
         //外号.给 @... 起外号 ...
         //外号.给 @... 取消外号 ...
-        //外号.给 @... 取消全部外号
-        ctx.command('外号.给').action(({ session }) => {
+        ctx.command('外号.给').action(({ args, session }) => {
             return session.event.user.name;
         })
 
@@ -76,8 +88,8 @@ export function apply(ctx: Context, config: Config) {
         ctx.command('呼唤').action(({ session }) => {
             return session.event.user.name;
         })
-        ctx.command('呼唤.测试').action(({ session }) => {
-            return '我的命运啊，我听到了，那是你在唱歌吗？'
+        ctx.command('呼唤.找').action(({ session }) => {
+            
         })
         if(config.globalEnableBlacklist) {
             ctx.command('呼唤.拉黑').action(({ session }) => {
