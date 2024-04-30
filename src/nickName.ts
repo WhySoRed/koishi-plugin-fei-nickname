@@ -64,7 +64,9 @@ export const nickNameDo = {
             else return nickNameDo.defaultNickName;
         },
         //同上，但是根据uid
-        getByUid: async (session: Session, uid:string) => {
+        getByUid: async (session: Session, uid:string | string[]) => {
+            if (Array.isArray(uid)) 
+                return Promise.all(uid.map(async uid => await nickNameDo._nick.getByUid(session,uid) as string));
             const ctx = session.app;
             let nickName = (await ctx.database.get('nnNickData', { ownerUid: uid }))[0]?.nickName;
             if(nickName) return nickName;
@@ -118,12 +120,10 @@ export const nickNameDo = {
             ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: uid, nickGiven: nickGiven });            
         },
 
-        show: async (session: Session, uid: string, nickGiven: string, page?: number) => {
+        show: async (session: Session, uid: string, page?: number) => {
             const ctx = session.app;
-            return ctx.database.select('nnGivenData', { cid: session.cid, ownerUid: uid });
-            /**
-             * 预计将做翻页功能
-             */
+            return ctx.database.select('nnGivenData', { cid: session.cid, ownerUid: uid })
+                    .limit(10).offset(page?10*(page-1):0).orderBy('nickGivenId');
         }
 
 

@@ -44,6 +44,7 @@ export function apply(ctx: Context, config: Config) {
         ctx.command('自称.取消').action(({ session }) => {
 
         })
+    }
 
     if(config.globalEnableNickNameGiven) {
 
