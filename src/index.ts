@@ -1,5 +1,5 @@
 import { Context, Schema, h, Session } from 'koishi'
-import { nickName } from './nickName';
+import { nickNameDo } from './nickName';
 
 export const name = 'fei-nickname'
 
@@ -26,7 +26,7 @@ interface nickName {
 }
 
 export function apply(ctx: Context, config: Config) {
-    nickName.initialize(ctx, config);
+    nickNameDo.initialize(ctx, config);
 
     ctx.command('外号测试').action(async ({ session }) => {
         return (session.username);
@@ -40,18 +40,10 @@ export function apply(ctx: Context, config: Config) {
         ctx.command('自称.设定').action(({ session }) => {
 
         })
-        ctx.command('自称.管理').action(({ session }) => {
-
-        })
 
         ctx.command('自称.取消').action(({ session }) => {
 
         })
-
-        ctx.command('自称.清空').action(({ session }) => {
-
-        })
-    }
 
     if(config.globalEnableNickNameGiven) {
 
@@ -88,9 +80,11 @@ export function apply(ctx: Context, config: Config) {
         ctx.command('呼唤').action(({ session }) => {
             return session.event.user.name;
         })
+
         ctx.command('呼唤.找').action(({ session }) => {
             
         })
+        
         if(config.globalEnableBlacklist) {
             ctx.command('呼唤.拉黑').action(({ session }) => {
                 return session.event.user.name;
