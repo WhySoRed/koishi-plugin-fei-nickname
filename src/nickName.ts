@@ -37,12 +37,13 @@ export const nickNameDo = {
     init : async (ctx: Context, config: Config): Promise<void> => await nickNameDo._ininitialize(ctx, config),
     getNick: async (session: Session, id?: string | string[]): Promise<string | string[]> => await nickNameDo._nick.get(session, (id?await nickNameDo._id2uid(session, id):undefined)),
     addNick : async (session: Session, nickName: string): Promise<boolean> => await nickNameDo._nick.add(session, nickName),
-    removeNick : async (session: Session, nickName: string): Promise<boolean> => await nickNameDo._nick.remove(session, nickName),
+    removeNick : async (session: Session/*, nickName: string*/): Promise<boolean> => await nickNameDo._nick.remove(session/*, nickName*/),
     getNickGiven : async (session: Session, id?: string | string[]): Promise<string | string[]> => await nickNameDo._nickGiven.get(session, (id?await nickNameDo._id2uid(session, id):undefined)),
     addNickGiven : async (session: Session, id: string, nickGiven: string): Promise<boolean> => await nickNameDo._nickGiven.add(session, await nickNameDo._id2uid(session, id), nickGiven),
-    showNickGiven : async (session: Session, page?: number) => await nickNameDo._nickGiven.show(session, page),
+    showNickGiven : async (session: Session, id: string, page?: number) => await nickNameDo._nickGiven.show(session, await nickNameDo._id2uid(session, id), page),
+    showOwnNickGiven : async (session: Session, page?: number) => await nickNameDo._nickGiven.show(session, undefined, page),
     findNickGiven : async (session: Session, nickGiven: string): Promise<string[]> => await nickNameDo._uid2id(await nickNameDo._nickGiven.find(session, nickGiven)),
-    countNickGiven : async (session: Session, id: string): Promise<number> => await nickNameDo._nickGiven.count(session, await nickNameDo._id2uid(session, id)),
+    countNickGiven : async (session: Session, id?: string): Promise<number> => await nickNameDo._nickGiven.count(session, (id?await nickNameDo._id2uid(session, id):undefined)),
     removeNickGiven : async (session: Session, id: string, nickGiven: string): Promise<boolean> => await nickNameDo._nickGiven.remove(session,await nickNameDo._id2uid(session, id), nickGiven),
     allBlacklistGiven : async (session: Session): Promise<boolean> => await nickNameDo._blacklist.all(session, "given"),
     allBlacklistDosth : async (session: Session): Promise<boolean> => await nickNameDo._blacklist.all(session, "dosth"),
@@ -95,9 +96,9 @@ export const nickNameDo = {
             await ctx.database.upsert('nnNickData', [{ ownerUid: session.uid, nickName: nickName }]);
             return true;
         },
-        remove: async (session: Session, nickName: string) => {
+        remove: async (session: Session/*, nickName: string*/) => {
             const ctx = session.app;
-            await ctx.database.remove('nnNickData', { ownerUid: session.uid, nickName: nickName });
+            await ctx.database.remove('nnNickData', { ownerUid: session.uid/*, nickName: nickName*/ });
             return true;
         },
 
@@ -146,14 +147,16 @@ export const nickNameDo = {
             return true;
         },
 
-        show: async (session: Session, page?: number) => {
+        show: async (session: Session, uid?: string, page?: number) => {
             const ctx = session.app;
-            const uid = session.uid;
-            return ctx.database.select('nnGivenData', { cid: session.cid, ownerUid: uid })
-                    .limit(10).offset(page?10*(page-1):0).orderBy('nickGivenId');
+            if(uid === undefined)
+                uid = session.uid;
+            return ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid },{limit : 10 , offset :page?10*(page-1):0})
         },
 
-        count: async (session: Session, uid: string) => {
+        count: async (session: Session, uid?: string) => {
+            if(uid === undefined)
+                uid = session.uid;
             const ctx = session.app;
             return (await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid })).length;
         },
@@ -192,13 +195,16 @@ export const nickNameDo = {
             if( type == "given" )
                 await ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: session.uid, giverUid: uid });
         },
-
+        //返回true表示拉黑成功
         switch: async(session: Session, uid: string, type: "given" | "dosth") => {
             const ctx = session.app;
             const blacklist = await ctx.database.get('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
-            if( blacklist.length == 0 ) await ctx.database.create('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
+            if( blacklist.length == 0 ) {
+                await ctx.database.create('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
+                return true;
+            }
             else await ctx.database.remove('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
-            return true;
+            return false;
         },
         //拉黑自己则表示禁止全部人对自己使用对应功能
         all: async(session: Session, type: "given" | "dosth") => {
