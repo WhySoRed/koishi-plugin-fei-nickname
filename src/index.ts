@@ -19,17 +19,21 @@ export const Config: Schema<Config> = Schema.object({
     globalEnableBlacklist: Schema.boolean().default(true).description('开启“拉黑”子功能，关闭会清空黑名单数据'),
 })
 
-interface nickName {
-    initialize : (ctx: Context, config: Config) => void
-    getNick: (session: Session) => string
-    getNickGiven: (session: Session,uid: string | string[]) => string | string[]
+interface nickNameDo {
+    init : (ctx: Context, config: Config) => void
+    getNick: (session: Session, id?: string | string[]) => Promise <string | string[]>
+    getNickGiven: (session: Session,uid?: string | string[]) => string | string[]
 }
 
 export function apply(ctx: Context, config: Config) {
-    nickNameDo.initialize(ctx, config);
+    nickNameDo.init(ctx, config);
 
-    ctx.command('外号测试').action(async ({ session }) => {
-        return (session.username);
+    ctx.command('外号测试').action(async ({ args, session }) => {
+        console.log(h.select(args[0],'at'))
+        if(args[0])
+            return await nickNameDo.getNickGiven(session, h.select(args[0],'at')[0].attrs.id);
+        console.log(await ctx.database.get('nnGivenData',{}))
+        return await nickNameDo.getNick(session);
     })
 
     if(config.globalEnableNickName) {
@@ -53,8 +57,12 @@ export function apply(ctx: Context, config: Config) {
         })
 
         ctx.command('外号.设定').alias('起外号')
-        .action(({ session }) => {
-            return session.event.user.name;
+        .action(async ({ args, session }) => {
+            if(args[0] && args[1]) {
+                if(await nickNameDo.addNickGiven(session, h.select(args[0],'at')[0].attrs.id, args[1]))
+                    return '起了起了';
+                else return '起不了起不了';
+            }
         })
 
         ctx.command('外号.取消').alias('取消外号')

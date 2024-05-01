@@ -34,64 +34,72 @@ export interface NNBlacklistData {
 }
 
 export const nickNameDo = {
-    defaultNickName: '',
-    initialize : async (ctx: Context, config: Config) => await nickNameDo._ininitialize(ctx, config),
-    getNick : async (session: Session): Promise<string> => await nickNameDo._nick.get(session),
-    getNickByUid : async (session: Session, uid: string | string[]): Promise<string | string[]> => await nickNameDo._nick.getByUid(session, uid),
-    getNickGiven : async (session: Session, uid: string | string[]): Promise<string | string[]> => await nickNameDo._nickGiven.get(session, uid),
-    addNick : async (session: Session, nickName: string) => await nickNameDo._nick.add(session, nickName),
-    addNickGiven : async (session: Session, uid: string, nickGiven: string) => await nickNameDo._nickGiven.add(session, uid, nickGiven),
-    removeNick : async (session: Session, nickName: string) => await nickNameDo._nick.remove(session, nickName),
-    removeNickGiven : async (session: Session, uid: string, nickGiven: string) => await nickNameDo._nickGiven.remove(session, uid, nickGiven),
-    switchBlacklistGiven : async (session: Session, uid: string) => await nickNameDo._blacklist.switch(session, uid, "given"),
-    switchBlacklistDosth : async (session: Session, uid: string) => await nickNameDo._blacklist.switch(session, uid, "dosth"),
-    allBlacklistGiven : async (session: Session) => await nickNameDo._blacklist.all(session, "given"),
-    allBlacklistDosth : async (session: Session) => await nickNameDo._blacklist.all(session, "dosth"),
-    checkBeBlacklist : async(session: Session, uid: string) => await nickNameDo._blacklist.check(session, uid),
+    init : async (ctx: Context, config: Config): Promise<void> => await nickNameDo._ininitialize(ctx, config),
+    getNick: async (session: Session, id?: string | string[]): Promise<string | string[]> => await nickNameDo._nick.get(session, (id?await nickNameDo._id2uid(session, id):undefined)),
+    addNick : async (session: Session, nickName: string): Promise<boolean> => await nickNameDo._nick.add(session, nickName),
+    removeNick : async (session: Session, nickName: string): Promise<boolean> => await nickNameDo._nick.remove(session, nickName),
+    getNickGiven : async (session: Session, id?: string | string[]): Promise<string | string[]> => await nickNameDo._nickGiven.get(session, (id?await nickNameDo._id2uid(session, id):undefined)),
+    addNickGiven : async (session: Session, id: string, nickGiven: string): Promise<boolean> => await nickNameDo._nickGiven.add(session, await nickNameDo._id2uid(session, id), nickGiven),
+    showNickGiven : async (session: Session, page?: number) => await nickNameDo._nickGiven.show(session, page),
+    findNickGiven : async (session: Session, nickGiven: string): Promise<string[]> => await nickNameDo._uid2id(await nickNameDo._nickGiven.find(session, nickGiven)),
+    countNickGiven : async (session: Session, id: string): Promise<number> => await nickNameDo._nickGiven.count(session, await nickNameDo._id2uid(session, id)),
+    removeNickGiven : async (session: Session, id: string, nickGiven: string): Promise<boolean> => await nickNameDo._nickGiven.remove(session,await nickNameDo._id2uid(session, id), nickGiven),
+    allBlacklistGiven : async (session: Session): Promise<boolean> => await nickNameDo._blacklist.all(session, "given"),
+    allBlacklistDosth : async (session: Session): Promise<boolean> => await nickNameDo._blacklist.all(session, "dosth"),
+    switchBlacklistGiven : async (session: Session, id: string): Promise<boolean> => await nickNameDo._blacklist.switch(session, await nickNameDo._id2uid(session, id), "given"),
+    switchBlacklistDosth : async (session: Session, id: string): Promise<boolean> => await nickNameDo._blacklist.switch(session, await nickNameDo._id2uid(session, id), "dosth"),
+    checkBeBlacklistGiven : async (session: Session, id: string): Promise<boolean> => await nickNameDo._blacklist.check(session, await nickNameDo._id2uid(session, id), "given"),
+    checkBeBlacklistDosth : async (session: Session, id: string) : Promise<boolean>=> await nickNameDo._blacklist.check(session, await nickNameDo._id2uid(session, id), "dosth"),
 
-    id2uid : (session:Session, id: string) => session.platform + ':' + id,
+    _defaultNickName: '',
+
+    _id2uid : async (session:Session, id: string | string[])=> {
+        if (Array.isArray(id)) 
+            return Promise.all(id.map(async uid => await nickNameDo._id2uid(session,uid) as string));
+        return session.platform + ':' + id
+    },
+
+    _uid2id : async (uid: string | string[]) => {
+        if (Array.isArray(uid)) 
+            return await Promise.all(uid.map(async uid => await nickNameDo._uid2id(uid) as string));
+        return uid.replace(/.*:/,'')
+    },
 
     _nick : {
-        //根据输入的session返回session的发送者的自称
+        //根据输入的session返回uid对应的自称，如果只输入session则获取发送者的自称
         //没有自称则会以群昵称>平台昵称>默认昵称的优先级向后获取
-        get : async (session: Session): Promise<string> => {
-            const ctx = session.app;
-            const uid = session.uid;
-            let nickName = (await ctx.database.get('nnNickData', { ownerUid: uid }))[0]?.nickName;
-            if(nickName) return nickName;
-            else if(session.event.member.nick) return session.event.member.nick;
-            else if(session.event.user.name) return session.event.user.name;
-            else return nickNameDo.defaultNickName;
-        },
-        //同上，但是根据uid
-        getByUid: async (session: Session, uid:string | string[]) => {
+        get: async (session: Session, uid?:string | string[]) => {
+            let uidBeInput = true;
+            if(uid === undefined) {uid = session.uid; uidBeInput = false;}
             if (Array.isArray(uid)) 
-                return Promise.all(uid.map(async uid => await nickNameDo._nick.getByUid(session,uid) as string));
+                return Promise.all(uid.map(async uid => await nickNameDo._nick.get(session,uid) as string));
             const ctx = session.app;
             let nickName = (await ctx.database.get('nnNickData', { ownerUid: uid }))[0]?.nickName;
             if(nickName) return nickName;
-            else {
-                try{
-                    const member = await session.bot.getGuildMember(session.event.guild.id, uid.replace(/.*:/,''))
-                    if(member.nick) return member.nick;
-                    else if(member.user.name) return member.user.name;
-                    else return nickNameDo.defaultNickName;
+            else try{
+                if(session.event.channel.type){
+                    const name = session.event.user.name;
+                    if(name) return name;
                 }
-                catch(err){
-                return nickNameDo.defaultNickName;
+                else{
+                    const member = await session.bot.getGuildMember(session.event.guild.id, uid.replace(/.*:/,''))
+                    if(member.nick !== '') return member.nick;
+                    else if(member.user.name) return member.user.name;
                 }
             }
+            catch(err){}
+            return nickNameDo._defaultNickName;
         },
-
         add: async (session: Session, nickName: string) => {
             const ctx = session.app;
-            ctx.database.upsert('nnNickData', [{ ownerUid: session.uid, nickName: nickName }]);
+            await ctx.database.upsert('nnNickData', [{ ownerUid: session.uid, nickName: nickName }]);
+            return true;
         },
-
         remove: async (session: Session, nickName: string) => {
             const ctx = session.app;
-            ctx.database.remove('nnNickData', { ownerUid: session.uid, nickName: nickName });
-        }
+            await ctx.database.remove('nnNickData', { ownerUid: session.uid, nickName: nickName });
+            return true;
+        },
 
     },
 
@@ -99,34 +107,77 @@ export const nickNameDo = {
         //根据输入的session和uid返回对应的外号
         //优先从本session发送者为该成员起的外号里随机获取，如果空则从本群组该成员拥有的外号里随机获取
         //若本群组该成员无外号，则以自称>群昵称>平台昵称>默认昵称的优先级向后获取
-        get: async (session: Session,uid:string | string[]): Promise<string | string[]> => {
+        get: async (session: Session, uid?:string | string[]): Promise<string | string[]> => {
+            if(uid === undefined) uid = session.uid;
             if (Array.isArray(uid)) 
                 return Promise.all(uid.map(async uid => await nickNameDo._nickGiven.get(session,uid) as string));
             const ctx = session.app;
-            let nickGiven = (await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid, giverUid: session.uid }))[0]?.nickGiven; 
-            if(nickGiven) return nickGiven;
-            else return await nickNameDo._nick.getByUid(session, uid);
+            let nickGivenList = await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid, giverUid: session.uid }); 
+            console.log(nickGivenList);
+            if(nickGivenList.length) {
+                return nickGivenList[Math.floor(Math.random() * nickGivenList.length)]['nickGiven'];
+            }
+            else {
+                nickGivenList = await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid })
+                if(nickGivenList.length) {
+                    return nickGivenList[Math.floor(Math.random() * nickGivenList.length)]['nickGiven'];
+                }
+            }
+            return await nickNameDo._nick.get(session, uid);
         },
 
         add: async (session: Session, uid: string, nickGiven: string) => {
             const ctx = session.app;
-            if(await nickNameDo._blacklist.check(session, uid)) return false;
-            ctx.database.create('nnGivenData', { cid: session.cid, ownerUid: uid, giverUid: session.uid, nickGiven: nickGiven });
+            if(await nickNameDo._blacklist.check(session, uid, "given")) return false;
+            try {
+                await ctx.database.create('nnGivenData', { cid: session.cid, ownerUid: uid, giverUid: session.uid, nickGiven: nickGiven });
+            }
+            catch(err) {
+                return false;
+            }
             return true;
         },
         //注意只有起外号的人和被起外号的人能移除对应的外号
         remove: async (session: Session, uid: string, nickGiven: string) => {
             const ctx = session.app;
-            ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: uid, nickGiven: nickGiven });            
+            const data = (await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid, nickGiven: nickGiven }))[0];
+            if(data.giverUid != session.uid && data.ownerUid != session.uid) return false;
+            await ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: uid, nickGiven: nickGiven });
+            return true;
         },
 
-        show: async (session: Session, uid: string, page?: number) => {
+        show: async (session: Session, page?: number) => {
             const ctx = session.app;
+            const uid = session.uid;
             return ctx.database.select('nnGivenData', { cid: session.cid, ownerUid: uid })
                     .limit(10).offset(page?10*(page-1):0).orderBy('nickGivenId');
-        }
+        },
 
-
+        count: async (session: Session, uid: string) => {
+            const ctx = session.app;
+            return (await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid })).length;
+        },
+        //根据外号查找对应的用户的uid，优先寻找群聊内有对应称号的用户，否则查找群聊内有对应自称的用户
+        find : async (session: Session, nickGiven: string): Promise<string[]> => {
+            const ctx = session.app;
+            let ownerUid = [(await ctx.database.get('nnGivenData', { cid: session.cid, nickGiven: nickGiven }))[0]?.ownerUid];
+            if(ownerUid.length) return ownerUid;
+            else {
+                const ownerUidAll = await ctx.database.get('nnNickData', { nickName: nickGiven });
+                //对所有具有该称号的用户进行筛选
+                ownerUid = await Promise.all(ownerUidAll.map(async data => {
+                    const ownerId = await nickNameDo._uid2id(data.ownerUid);
+                    try {
+                        await session.bot.getGuildMember(session.event.guild.id, ownerId);
+                        return data.ownerUid;
+                    }
+                    catch(err) {
+                        return '';
+                    }
+                }).filter(async uid => {await uid != ''}));
+            }
+            return ownerUid;
+        },
     },
 
     _blacklist : {
@@ -138,6 +189,8 @@ export const nickNameDo = {
         remove: async(session: Session, uid: string, type: "given" | "dosth") => {
             const ctx = session.app;
             await ctx.database.remove('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
+            if( type == "given" )
+                await ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: session.uid, giverUid: uid });
         },
 
         switch: async(session: Session, uid: string, type: "given" | "dosth") => {
@@ -145,22 +198,27 @@ export const nickNameDo = {
             const blacklist = await ctx.database.get('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
             if( blacklist.length == 0 ) await ctx.database.create('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
             else await ctx.database.remove('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
+            return true;
         },
         //拉黑自己则表示禁止全部人对自己使用对应功能
         all: async(session: Session, type: "given" | "dosth") => {
+            const ctx = session.app;
+            if( type == "given" ) {
+                await ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: session.uid });
+            }
             return await nickNameDo._blacklist.switch(session, session.uid, type);
         },
         //检测发送者是否被对方拉黑（注意与拉黑方向相反）
-        check : async(session: Session, uid: string):Promise<boolean> => {
+        check : async(session: Session, uid: string, type: "given" | "dosth"):Promise<boolean> => {
             const ctx = session.app;
-            if(await ctx.database.get('nnBlacklistData', { fromUid: uid, toUid: uid })) return true;
-            if(await ctx.database.get('nnBlacklistData', { fromUid: uid, toUid: session.uid })) return true;
-            return true;
+            if((await ctx.database.get('nnBlacklistData', { fromUid: uid, toUid: uid, type: type})).length) return true;
+            if((await ctx.database.get('nnBlacklistData', { fromUid: uid, toUid: session.uid, type: type })).length) return true;
+            return false;
         }
     },
 
     _ininitialize : async (ctx: Context, config : Config) => {
-        nickNameDo.defaultNickName = config.defaultNickName;
+        nickNameDo._defaultNickName = config.defaultNickName;
         if(config.globalEnableNickName) {
             ctx.model.extend('nnNickData', {
                 nickNameId: { type: 'unsigned', nullable: false },
@@ -169,6 +227,7 @@ export const nickNameDo = {
             },{
                 primary: 'nickNameId',
                 autoInc: true,
+                unique: [['ownerUid','nickName']],
             })
         }
         else {
