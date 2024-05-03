@@ -34,10 +34,6 @@ interface nickNameDo {
 
 export function apply(ctx: Context, config: Config) {
     nickNameDo.init(ctx, config);
-
-    ctx.command('外号测试 <message:text>').action(async ({ session }, message) => {
-        console.log(await session.bot.getGuildMemberList(session.event.guild.id));
-    })
     //开启自称
     if(config.globalEnableNickName) {
 
