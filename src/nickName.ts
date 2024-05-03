@@ -36,13 +36,13 @@ export interface NNBlacklistData {
 export const nickNameDo = {
     init : async (ctx: Context, config: Config): Promise<void> => await nickNameDo._ininitialize(ctx, config),
     getNick: async (session: Session, id?: string | string[]): Promise<string | string[]> => await nickNameDo._nick.get(session, (id?await nickNameDo._id2uid(session, id):undefined)),
+    find : async (session: Session, nickGiven: string): Promise<string[]> => await nickNameDo._uid2id(await nickNameDo._find(session, nickGiven)),
     addNick : async (session: Session, nickName: string): Promise<boolean> => await nickNameDo._nick.add(session, nickName),
     removeNick : async (session: Session/*, nickName: string*/): Promise<boolean> => await nickNameDo._nick.remove(session/*, nickName*/),
-    getNickGiven : async (session: Session, id?: string | string[]): Promise<string | string[]> => await nickNameDo._nickGiven.get(session, (id?await nickNameDo._id2uid(session, id):undefined)),
+    getNickGiven : async (session: Session, ownerId?: string | string[], giverId?: string): Promise<string | string[]> => await nickNameDo._nickGiven.get(session, (ownerId? await nickNameDo._id2uid(session, ownerId): undefined), (giverId? await nickNameDo._id2uid(session, giverId): undefined)),
     addNickGiven : async (session: Session, id: string, nickGiven: string): Promise<boolean> => await nickNameDo._nickGiven.add(session, await nickNameDo._id2uid(session, id), nickGiven),
     showNickGiven : async (session: Session, id: string, page?: number) => await nickNameDo._nickGiven.show(session, await nickNameDo._id2uid(session, id), page),
     showOwnNickGiven : async (session: Session, page?: number) => await nickNameDo._nickGiven.show(session, undefined, page),
-    findNickGiven : async (session: Session, nickGiven: string): Promise<string[]> => await nickNameDo._uid2id(await nickNameDo._nickGiven.find(session, nickGiven)),
     countNickGiven : async (session: Session, id?: string): Promise<number> => await nickNameDo._nickGiven.count(session, (id?await nickNameDo._id2uid(session, id):undefined)),
     removeNickGiven : async (session: Session, id: string, nickGiven: string): Promise<boolean> => await nickNameDo._nickGiven.remove(session,await nickNameDo._id2uid(session, id), nickGiven),
     allBlacklistGiven : async (session: Session): Promise<boolean> => await nickNameDo._blacklist.all(session, "given"),
@@ -105,26 +105,27 @@ export const nickNameDo = {
     },
 
     _nickGiven : {
-        //根据输入的session和uid返回对应的外号
+        //根据输入的session和ownerUid返回对应的外号
         //优先从本session发送者为该成员起的外号里随机获取，如果空则从本群组该成员拥有的外号里随机获取
         //若本群组该成员无外号，则以自称>群昵称>平台昵称>默认昵称的优先级向后获取
-        get: async (session: Session, uid?:string | string[]): Promise<string | string[]> => {
-            if(uid === undefined) uid = session.uid;
-            if (Array.isArray(uid)) 
-                return Promise.all(uid.map(async uid => await nickNameDo._nickGiven.get(session,uid) as string));
+        //第三个参数是起外号的人
+        get: async (session: Session, ownerUid?:string | string[], giverUid?: string): Promise<string | string[]> => {
+            if(ownerUid === undefined) ownerUid = session.uid;
+            if( giverUid === undefined ) giverUid = session.uid;
+            if (Array.isArray(ownerUid)) 
+                return Promise.all(ownerUid.map(async ownerUid => await nickNameDo._nickGiven.get(session,ownerUid) as string));
             const ctx = session.app;
-            let nickGivenList = await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid, giverUid: session.uid }); 
-            console.log(nickGivenList);
+            let nickGivenList = await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: ownerUid, giverUid: giverUid }); 
             if(nickGivenList.length) {
                 return nickGivenList[Math.floor(Math.random() * nickGivenList.length)]['nickGiven'];
             }
             else {
-                nickGivenList = await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid })
+                nickGivenList = await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: ownerUid })
                 if(nickGivenList.length) {
                     return nickGivenList[Math.floor(Math.random() * nickGivenList.length)]['nickGiven'];
                 }
             }
-            return await nickNameDo._nick.get(session, uid);
+            return await nickNameDo._nick.get(session, ownerUid);
         },
 
         add: async (session: Session, uid: string, nickGiven: string) => {
@@ -151,7 +152,7 @@ export const nickNameDo = {
             const ctx = session.app;
             if(uid === undefined)
                 uid = session.uid;
-            return ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid },{limit : 10 , offset :page?10*(page-1):0})
+            return ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid }, {limit : 10 , offset :page?10*(page-1):0})
         },
 
         count: async (session: Session, uid?: string) => {
@@ -159,27 +160,6 @@ export const nickNameDo = {
                 uid = session.uid;
             const ctx = session.app;
             return (await ctx.database.get('nnGivenData', { cid: session.cid, ownerUid: uid })).length;
-        },
-        //根据外号查找对应的用户的uid，优先寻找群聊内有对应称号的用户，否则查找群聊内有对应自称的用户
-        find : async (session: Session, nickGiven: string): Promise<string[]> => {
-            const ctx = session.app;
-            let ownerUid = [(await ctx.database.get('nnGivenData', { cid: session.cid, nickGiven: nickGiven }))[0]?.ownerUid];
-            if(ownerUid.length) return ownerUid;
-            else {
-                const ownerUidAll = await ctx.database.get('nnNickData', { nickName: nickGiven });
-                //对所有具有该称号的用户进行筛选
-                ownerUid = await Promise.all(ownerUidAll.map(async data => {
-                    const ownerId = await nickNameDo._uid2id(data.ownerUid);
-                    try {
-                        await session.bot.getGuildMember(session.event.guild.id, ownerId);
-                        return data.ownerUid;
-                    }
-                    catch(err) {
-                        return '';
-                    }
-                }).filter(async uid => {await uid != ''}));
-            }
-            return ownerUid;
         },
     },
 
@@ -222,7 +202,37 @@ export const nickNameDo = {
             return false;
         }
     },
-
+    //根据外号查找对应的用户的uid，
+    //优先级群聊内有对应称号的用户>群聊内有对应自称的用户>群聊内有对应群昵称的用户>对应账户名的用户
+    _find : async (session: Session, nickGiven: string): Promise<string[]> => {
+        const ctx = session.app;
+        let ownerUid = [(await ctx.database.get('nnGivenData', { cid: session.cid, nickGiven: nickGiven }))[0]?.ownerUid];
+        if(ownerUid[0] !== undefined) return ownerUid;
+        else {
+            const ownerUidAll = await ctx.database.get('nnNickData', { nickName: nickGiven });
+            //对所有具有该称号的用户进行筛选
+            ownerUid = await Promise.all(ownerUidAll.map(async data => {
+                const ownerId = await nickNameDo._uid2id(data.ownerUid);
+                try {
+                    await session.bot.getGuildMember(session.event.guild.id, ownerId);
+                    return data.ownerUid;
+                }
+                catch(err) {
+                    return '';
+                }
+            }).filter(async uid => {await uid != ''}));
+        }
+        if(ownerUid[0] !== undefined) return ownerUid;
+        //对群昵称进行筛选，失败则对账户名进行筛选
+        else {
+            const guildMemverList = (await session.bot.getGuildMemberList(session.event.guild.id)).data;
+            ownerUid = guildMemverList.filter(member => member.nick == nickGiven).map(member => session.platform + ':' + member.user.id);
+            if( ownerUid[0] !== undefined ) return ownerUid;
+            else 
+            ownerUid = guildMemverList.filter(member => member.user.name == nickGiven).map(member => session.platform + ':' + member.user.id);
+        }
+        return ownerUid;
+    },
     _ininitialize : async (ctx: Context, config : Config) => {
         nickNameDo._defaultNickName = config.defaultNickName;
         if(config.globalEnableNickName) {
