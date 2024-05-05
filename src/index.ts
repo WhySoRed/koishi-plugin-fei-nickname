@@ -1,35 +1,11 @@
-import { Context, Schema, h, Session, Service } from 'koishi'
-import { nickNameDo, NNNickData, NNGivenData, NNBlacklistData } from './nickName';
+import { Context, Schema, h, Session} from 'koishi'
+import { nickNameDo } from './nickName';
+import { Nickname } from './nicknameServer'
 export const inject = {
     required: ['database'],
 }
 
 export const name = 'fei-nickname'
-
-declare module 'koishi' {
-    interface Context {
-        nickname: Nickname
-    }
-    interface Tables {
-        nnNickData: NNNickData
-        nnGivenData: NNGivenData
-        nnBlacklistData: NNBlacklistData
-    }
-}
-
-class Nickname extends Service {
-    static [Service.provide] = 'nickName'
-    static inject = ['database']
-
-    constructor(ctx: Context) {super(ctx, 'nickName', true)};
-    
-    async getNick(session: Session, id?: string | string[]) {
-        return await nickNameDo.getNick(session, id);
-    }
-    async getNickGiven(session: Session, uid?: string | string[]) {
-        return await nickNameDo.getNickGiven(session,uid);
-    }
-}
 
 export interface Config {
     defaultNickName:string
@@ -61,6 +37,8 @@ interface nickNameDo {
 }
 
 export function apply(ctx: Context, config: Config) {
+    ctx.plugin(Nickname);
+
     nickNameDo.init(ctx, config);
     //开启自称
     if(config.globalEnableNickName) {
