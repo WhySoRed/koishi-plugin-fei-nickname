@@ -1,6 +1,8 @@
 import { Context, Schema, h, Session} from 'koishi'
 import { nickNameDo } from './nickName';
 import { Nickname } from './nicknameServer'
+
+export * from './nicknameServer'
 export const inject = {
     required: ['database'],
 }
