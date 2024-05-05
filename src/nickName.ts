@@ -1,16 +1,5 @@
-import { Context, remove, Session } from 'koishi'
+import { Context, Session } from 'koishi'
 import { Config } from '.'
-export const inject = {
-    required: ['database'],
-}
-
-declare module 'koishi' {
-    interface Tables {
-        nnNickData: NNNickData
-        nnGivenData: NNGivenData
-        nnBlacklistData: NNBlacklistData
-    }
-}
 
 export interface NNNickData {
     nickNameId: number

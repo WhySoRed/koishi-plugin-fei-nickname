@@ -1,7 +1,8 @@
 {
   "name": "koishi-plugin-fei-nickname",
   "description": "外号、自称与呼唤：群聊社会的命运",
-  "version": "0.1.0",
+  "homepage": "https://github.com/WhySoRed/koishi-plugin-fei-nickname",
+  "version": "0.1.3",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -18,9 +19,12 @@
     "koishi": "^4.17.4"
   },
   "koishi": {
-    "services": {
+    "service": {
       "required": [
         "database"
+      ],
+      "implements": [
+        "nickname"
       ]
     }
   }

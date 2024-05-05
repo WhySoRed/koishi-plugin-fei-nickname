@@ -1,7 +1,35 @@
-import { Context, Schema, h, Session, Command } from 'koishi'
-import { nickNameDo } from './nickName';
+import { Context, Schema, h, Session, Service } from 'koishi'
+import { nickNameDo, NNNickData, NNGivenData, NNBlacklistData } from './nickName';
+export const inject = {
+    required: ['database'],
+}
 
 export const name = 'fei-nickname'
+
+declare module 'koishi' {
+    interface Context {
+        nickname: Nickname
+    }
+    interface Tables {
+        nnNickData: NNNickData
+        nnGivenData: NNGivenData
+        nnBlacklistData: NNBlacklistData
+    }
+}
+
+class Nickname extends Service {
+    static [Service.provide] = 'nickName'
+    static inject = ['database']
+
+    constructor(ctx: Context) {super(ctx, 'nickName', true)};
+    
+    async getNick(session: Session, id?: string | string[]) {
+        return await nickNameDo.getNick(session, id);
+    }
+    async getNickGiven(session: Session, uid?: string | string[]) {
+        return await nickNameDo.getNickGiven(session,uid);
+    }
+}
 
 export interface Config {
     defaultNickName:string
