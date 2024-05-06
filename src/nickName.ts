@@ -75,7 +75,11 @@ export const nickNameDo = {
                     if(name) return name;
                 }
                 else{
-                    const member = await session.bot.getGuildMember(session.event.guild.id, uid.replace(/.*:/,''))
+                    const member = await Promise.any(
+                        (await session.bot.getGuildList()).data.map(async guild => 
+                            (await session.bot.getGuildMember(guild.id, uid.replace(/.*:/,'')))
+                        )
+                    )
                     if(member.nick !== '') return member.nick;
                     else if(member.user.name) return member.user.name;
                 }
@@ -159,13 +163,14 @@ export const nickNameDo = {
         add: async(session: Session, uid: string, type: "given" | "dosth") => {
             const ctx = session.app;
             await ctx.database.create('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
+            if( type == "given" ) {
+                await ctx.database.remove('nnGivenData', { ownerUid: session.uid, giverUid: uid });
+            }
         },
 
         remove: async(session: Session, uid: string, type: "given" | "dosth") => {
             const ctx = session.app;
             await ctx.database.remove('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
-            if( type == "given" )
-                await ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: session.uid, giverUid: uid });
         },
         //返回true表示拉黑成功
         switch: async(session: Session, uid: string, type: "given" | "dosth") => {
@@ -173,6 +178,9 @@ export const nickNameDo = {
             const blacklist = await ctx.database.get('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
             if( blacklist.length == 0 ) {
                 await ctx.database.create('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
+                if( type == "given" ) {
+                    await ctx.database.remove('nnGivenData', { ownerUid: session.uid, giverUid: uid });
+                }
                 return true;
             }
             else await ctx.database.remove('nnBlacklistData', { fromUid: session.uid, toUid: uid, type: type });
@@ -182,7 +190,7 @@ export const nickNameDo = {
         all: async(session: Session, type: "given" | "dosth") => {
             const ctx = session.app;
             if( type == "given" ) {
-                await ctx.database.remove('nnGivenData', { cid: session.cid, ownerUid: session.uid });
+                await ctx.database.remove('nnGivenData', { ownerUid: session.uid });
             }
             return await nickNameDo._blacklist.switch(session, session.uid, type);
         },

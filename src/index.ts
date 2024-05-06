@@ -73,7 +73,7 @@ export function apply(ctx: Context, config: Config) {
 你现在在本群有${await nickNameDo.countNickGiven(session)}个外号
 指令格式：
 外号.设定 [@对方] [外号] 来给别人起外号
-外号.取消 [@对方] [外号] 来取消别人的外号
+外号.取消 [@对方] [外号] 来取消别人的外号(自己的也可以)
 外号.给 [@对方] 起外号 [外号] 来给别人起外号
 外号.给 [@对方] 取消外号 [外号] 来取消别人的外号
 外号.查看 [@对方] 来查看别人的外号
@@ -118,7 +118,7 @@ export function apply(ctx: Context, config: Config) {
             else return '指令不太对劲呀';
         })
 
-        ctx.command('外号.查看').alias('外号查看')
+        ctx.command('外号.查看').alias('外号查看','.列表')
         .action(async ({ args, session }) => {
             let nickNameData = [], nickNameCount = 0, page:number;
             //查看自己的外号
@@ -153,7 +153,7 @@ export function apply(ctx: Context, config: Config) {
 
             let nickNameString = '外号列表如下：\n' + (page === undefined?'':`第${page}页：\n`);
             for(let i = 0; i < nickNameData.length; i++) {
-                nickNameString += `${nickNameData[i].nickGiven} 是 ${await nickNameDo.getNick(session, nickNameData[i].from)} 起的\n`;
+                nickNameString += `${nickNameData[i].nickGiven} 是 ${await nickNameDo.getNick(session, nickNameData[i].giverUid.replace(/.*:/,''))} 起的\n`;
             }
             return nickNameString + `共有${nickNameCount}个外号${nickNameCount > 10?'，剩余外号可以输入对应的页数来查看':''}`;
         })
@@ -167,14 +167,14 @@ export function apply(ctx: Context, config: Config) {
                     else 
                         return `现在可以被起外号了~`;
                 }
-                else if(session.event.user.id === h.select(args[1],'at')[0].attrs.id){
+                else if(session.event.user.id === h.select(args[0],'at')[0].attrs.id){
                     return '你在干嘛...';
                 }
-                else if(h.select(args[1],'at').length === 1){
-                    if(await nickNameDo.switchBlacklistGiven(session, h.select(args[1],'at')[0].attrs.id))
-                        return `已禁止${await nickNameDo.getNick(session,h.select(args[1],'at')[0].attrs.id)}给你起外号，ta给你起的外号也清空啦，要再发送本指令才会允许~`;
+                else if(h.select(args[0],'at').length === 1){
+                    if(await nickNameDo.switchBlacklistGiven(session, h.select(args[0],'at')[0].attrs.id))
+                        return `已禁止${await nickNameDo.getNick(session,h.select(args[0],'at')[0].attrs.id)}给你起外号，ta给你起的外号也清空啦，要再发送本指令才会允许~`;
                     else
-                        return `已取消禁止，现在可以被${await nickNameDo.getNick(session,h.select(args[1],'at')[0].attrs.id)}起外号了`;
+                        return `已取消禁止，现在可以被${await nickNameDo.getNick(session,h.select(args[0],'at')[0].attrs.id)}起外号了`;
                 }
                 return '指令不太对劲呀';
             })
@@ -270,14 +270,14 @@ export function apply(ctx: Context, config: Config) {
                     else 
                         return `已取消禁止，现在可以被做一些事情了`;
                 }
-                else if(session.event.user.id === h.select(args[1],'at')[0].attrs.id){
+                else if(session.event.user.id === h.select(args[0],'at')[0].attrs.id){
                     return '你在干嘛...';
                 }
-                else if(h.select(args[1],'at').length === 1){
-                    if(await nickNameDo.switchBlacklistDosth(session, h.select(args[1],'at')[0].attrs.id))
-                        return `已禁止${args[1]}对你动手动脚，要再发送本指令才会允许~`;
+                else if(h.select(args[0],'at').length === 1){
+                    if(await nickNameDo.switchBlacklistDosth(session, h.select(args[0],'at')[0].attrs.id))
+                        return `已禁止${args[0]}对你动手动脚，要再发送本指令才会允许~`;
                     else
-                        return `已取消禁止，现在可以被${args[1]}做什么了`;
+                        return `已取消禁止，现在可以被${args[0]}做什么了`;
                 }
                 return '指令不太对劲呀';
             })
