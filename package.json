@@ -2,7 +2,7 @@
   "name": "koishi-plugin-fei-nickname",
   "description": "外号、自称与呼唤：群聊社会的命运",
   "homepage": "https://github.com/WhySoRed/koishi-plugin-fei-nickname",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
