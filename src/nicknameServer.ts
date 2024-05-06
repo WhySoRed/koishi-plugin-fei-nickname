@@ -22,7 +22,7 @@ export class Nickname extends Service {
     async getNick(session: Session, id?: string | string[]) {
         return await nickNameDo.getNick(session, id);
     }
-    async getNickGiven(session: Session, uid?: string | string[]) {
-        return await nickNameDo.getNickGiven(session,uid);
+    async getNickGiven(session: Session, ownerId?: string | string[], giverId?: string) {
+        return await nickNameDo.getNickGiven(session, ownerId, giverId);
     }
 }

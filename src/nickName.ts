@@ -45,7 +45,7 @@ export const nickNameDo = {
 
     _id2uid : async (session:Session, id: string | string[])=> {
         if (Array.isArray(id)) 
-            return Promise.all(id.map(async uid => await nickNameDo._id2uid(session,uid) as string));
+            return Promise.all(id.map(async id => await nickNameDo._id2uid(session, id) as string));
         return session.platform + ':' + id
     },
 
@@ -59,8 +59,7 @@ export const nickNameDo = {
         //根据输入的session返回uid对应的自称，如果只输入session则获取发送者的自称
         //没有自称则会以群昵称>平台昵称>默认昵称的优先级向后获取
         get: async (session: Session, uid?:string | string[]) => {
-            let uidBeInput = true;
-            if(uid === undefined) {uid = session.uid; uidBeInput = false;}
+            if(uid === undefined) {uid = session.uid}
             if (Array.isArray(uid)) 
                 return Promise.all(uid.map(async uid => await nickNameDo._nick.get(session,uid) as string));
             const ctx = session.app;
@@ -68,7 +67,11 @@ export const nickNameDo = {
             if(nickName) return nickName;
             else try{
                 if(session.event.channel.type){
-                    const name = session.event.user.name;
+                    const name = await Promise.any(
+                        (await session.bot.getGuildList()).data.map(async guild => 
+                            (await session.bot.getGuildMember(guild.id, uid.replace(/.*:/,''))).user.name
+                        )
+                    )
                     if(name) return name;
                 }
                 else{
@@ -100,7 +103,7 @@ export const nickNameDo = {
         //第三个参数是起外号的人
         get: async (session: Session, ownerUid?:string | string[], giverUid?: string): Promise<string | string[]> => {
             if(ownerUid === undefined) ownerUid = session.uid;
-            if( giverUid === undefined ) giverUid = session.uid;
+            if(giverUid === undefined) giverUid = session.uid;
             if (Array.isArray(ownerUid)) 
                 return Promise.all(ownerUid.map(async ownerUid => await nickNameDo._nickGiven.get(session,ownerUid) as string));
             const ctx = session.app;
