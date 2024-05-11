@@ -15,15 +15,25 @@ export interface Config {
     globalEnableNickNameGiven: boolean
     globalEnableDoSomeThing: boolean
     globalEnableBlacklist: boolean
+    enableEasyFind: boolean
+    enableEasyDoSth: boolean
+    enableAt2Find: boolean
 }
 
-export const Config: Schema<Config> = Schema.object({
+export const Config: Schema<Config> = Schema.intersect([
+    Schema.object({
     defaultNickName: Schema.string().default('那个谁').description('获取用户名失败时的默认名称'),
     globalEnableNickName: Schema.boolean().default(true).description('开启“自称”功能，关闭会清空自称数据'),
     globalEnableNickNameGiven: Schema.boolean().default(true).description('开启“外号”功能，关闭会清空外号数据'),
     globalEnableDoSomeThing: Schema.boolean().default(true).description('开启“呼唤”功能，关闭也不会清空什么数据'),
     globalEnableBlacklist: Schema.boolean().default(true).description('开启“拉黑”子功能，关闭会清空黑名单数据'),
-})
+    }),
+    Schema.object({
+        enableEasyFind: Schema.boolean().default(false).description('为"呼唤.找"添加一个快捷指令"找"'),
+        enableEasyDoSth: Schema.boolean().default(false).description('为"呼唤.我要"添加一个快捷指令"/"'),
+        enableAt2Find: Schema.boolean().default(false).description('让以"@"开始却没有艾特到用户的群聊文本被视为"呼唤.找"')
+    }).description('快捷指令')
+])
 
 export const usage = `本插件提供了一些外号与自称相关的一些功能，以及“呼唤”这个功能来使用他们
 
@@ -31,12 +41,6 @@ export const usage = `本插件提供了一些外号与自称相关的一些功�
 nickNameDo.getNick(session, id?) -优先获取自称
 nickNameDo.getNickGiven(session, Ownerid?, GiverId?) -优先获取外号
 这两个方法，以便在其他插件中使用...`
-
-interface nickNameDo {
-    init : (ctx: Context, config: Config) => void
-    getNick: (session: Session, id?: string | string[]) => Promise <string | string[]>
-    getNickGiven: (session: Session,uid?: string | string[]) => string | string[]
-}
 
 export function apply(ctx: Context, config: Config) {
     ctx.plugin(Nickname);
@@ -232,17 +236,17 @@ export function apply(ctx: Context, config: Config) {
             if(h.select(args[1],'at').length === 1 ) {
                 if(await nickNameDo.checkBeBlacklistDosth(session, h.select(args[1],'at')[0].attrs.id))
                     return await nickNameDo.getNick(session, h.select(args[1],'at')[0].attrs.id) + '把你拉黑了，不能对ta动手动脚~';
-                return await nickNameDo.getNick(session) + args[0] + '了一下' + await nickNameDo.getNickGiven(session, h.select(args[1],'at')[0].attrs.id);
+                return await nickNameDo.getNick(session) + args[0] + '了' + await nickNameDo.getNickGiven(session, h.select(args[1],'at')[0].attrs.id) + args.slice(2).join(' ');
             }
             if(h.select(args[1],'at').length > 1) return '只能一个人哦~';
             else {
                 const findId = await nickNameDo.find(session, args[1]);
                 if(findId.length === 0) return '没有找到这个人呀';
                 if(findId.length === 1) {
-                    if(findId[0] === session.event.user.id) return await nickNameDo.getNick(session) + args[0] + '了一下自己';
+                    if(findId[0] === session.event.user.id) return await nickNameDo.getNick(session) + args[0] + '了自己' + args.slice(2).join(' ');
                     if(await nickNameDo.checkBeBlacklistDosth(session, findId[0]))
                         return await nickNameDo.getNick(session, findId[0]) + '把你拉黑了，不能对ta动手动脚~';
-                    return await nickNameDo.getNick(session) + args[0] + '了一下 ' + h.at(findId[0]);
+                    return await nickNameDo.getNick(session) + args[0] + '了 ' + h.at(findId[0]) + args.slice(2).join(' ');
                 }
                 if(findId.length > 1) {
                     if(args[2] === undefined){
@@ -255,7 +259,7 @@ export function apply(ctx: Context, config: Config) {
                     else if(Number.isNaN(+args[2]) || +args[2] > findId.length) return '序号有误';
                     else if(await nickNameDo.checkBeBlacklistDosth(session, findId[+args[1]-1]))
                         return await nickNameDo.getNick(session, findId[+args[1]-1]) + '把你拉黑了，不能对ta动手动脚~';
-                    else return await nickNameDo.getNick(session) + args[0] + '了一下 ' + h.at(findId[+args[1]-1]);
+                    else return await nickNameDo.getNick(session) + args[0] + '了 ' + h.at(findId[+args[1]-1]) + args.slice(2).join(' ');
 
                 }
             }
@@ -280,6 +284,28 @@ export function apply(ctx: Context, config: Config) {
                         return `已取消禁止，现在可以被${args[0]}做什么了`;
                 }
                 return '指令不太对劲呀';
+            })
+        }
+
+        if(config.enableEasyFind) {
+            ctx.command('找').action(async ({ args, session }) => {
+                session.execute( `呼唤.找 ${args.join(' ')}`)
+            })
+        }
+
+        if(config.enableEasyDoSth) {
+            ctx.command('/').action(async ({ args, session }) => {
+                session.execute( `呼唤.我要 ${args.join(' ')}`)
+            })
+        }
+
+        if(config.enableAt2Find) {
+            ctx.on('message', async (session) => {
+                if(session.event.channel.type) return;
+                const message = h.select( session.content, 'text')[0].attrs.content;
+                if(message.startsWith('@')||message.startsWith('＠')) {
+                    session.execute( `呼唤.找 ${message.replace(/@|＠/,'')}`)
+                }
             })
         }
     }

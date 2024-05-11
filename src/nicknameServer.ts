@@ -25,4 +25,7 @@ export class Nickname extends Service {
     async getNickGiven(session: Session, ownerId?: string | string[], giverId?: string) {
         return await nickNameDo.getNickGiven(session, ownerId, giverId);
     }
+    async find(session: Session, name: string) {
+        return await nickNameDo.find(session, name);
+    }
 }
